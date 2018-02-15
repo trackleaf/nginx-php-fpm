@@ -58,7 +58,9 @@ if [ ! -d "/var/www/html/.git" ]; then
     fi
    fi
    ${GIT_COMMAND} /var/www/html || exit 1
-   chown -Rf nginx.nginx /var/www/html
+   if [ -z "$SKIP_CHOWN" ]; then
+     chown -Rf nginx.nginx /var/www/html
+   fi
  fi
 fi
 
@@ -113,6 +115,12 @@ if [ -f /etc/nginx/sites-available/default-ssl.conf ]; then
    sed -i "s#172.16.0.0/12#$REAL_IP_FROM#" /etc/nginx/sites-available/default-ssl.conf
   fi
  fi
+fi
+
+#Display errors in docker logs
+if [ ! -z "$PHP_ERRORS_STDERR" ]; then
+  echo "log_errors = On" >> /usr/local/etc/php/conf.d/docker-vars.ini
+  echo "error_log = /dev/stderr" >> /usr/local/etc/php/conf.d/docker-vars.ini
 fi
 
 # Increase the memory_limit
@@ -170,15 +178,16 @@ if [ ! -z "$PUID" ]; then
   addgroup -g ${PGID} nginx
   adduser -D -S -h /var/cache/nginx -s /sbin/nologin -G nginx -u ${PUID} nginx
 else
-  # Always chown webroot for better mounting
-  chown -Rf nginx.nginx /var/www/html
+  if [ -z "$SKIP_CHOWN" ]; then
+    chown -Rf nginx.nginx /var/www/html
+  fi
 fi
 
 # Run custom scripts
 if [[ "$RUN_SCRIPTS" == "1" ]] ; then
   if [ -d "/var/www/html/scripts/" ]; then
     # make scripts executable incase they aren't
-    chmod -Rf 750 /var/www/html/scripts/*
+    chmod -Rf 750 /var/www/html/scripts/*; sync;
     # run scripts in number order
     for i in `ls /var/www/html/scripts/`; do /var/www/html/scripts/$i ; done
   else
@@ -186,14 +195,16 @@ if [[ "$RUN_SCRIPTS" == "1" ]] ; then
   fi
 fi
 
-# Try auto install for composer
-if [ -f "/var/www/html/composer.lock" ]; then
-    if [ "$APPLICATION_ENV" == "development" ]; then
-        composer global require hirak/prestissimo
-        composer install --working-dir=/var/www/html
-    else
-        composer global require hirak/prestissimo
-        composer install --no-dev --working-dir=/var/www/html
+if [ -z "$SKIP_COMPOSER" ]; then
+    # Try auto install for composer
+    if [ -f "/var/www/html/composer.lock" ]; then
+        if [ "$APPLICATION_ENV" == "development" ]; then
+            composer global require hirak/prestissimo
+            composer install --working-dir=/var/www/html
+        else
+            composer global require hirak/prestissimo
+            composer install --no-dev --working-dir=/var/www/html
+        fi
     fi
 fi
 
