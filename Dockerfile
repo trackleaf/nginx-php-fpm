@@ -213,6 +213,10 @@ RUN echo @testing http://nl.alpinelinux.org/alpine/edge/testing >> /etc/apk/repo
     apk del gcc musl-dev linux-headers libffi-dev augeas-dev python-dev make autoconf
 #    ln -s /usr/bin/php7 /usr/bin/php
 
+# gmp
+RUN apk add --update --no-cache gmp gmp-dev \
+    && docker-php-ext-install gmp
+
 ADD conf/supervisord.conf /etc/supervisord.conf
 
 # Copy our nginx config
